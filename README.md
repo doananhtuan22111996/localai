@@ -1,21 +1,21 @@
-# 🤖 LocalAI — Terminal AI Assistant
+# LocalAI — Terminal AI Assistant
 
-> Claude Code / Cursor cho máy local, miễn phí, chạy với bất kỳ model nào.
-
----
-
-## Tính năng
-
-- **Đọc & hiểu codebase** — Tự động đọc cấu trúc project, README, package.json khi bắt đầu
-- **Chạy bash commands** — AI tự chạy `npm install`, `pytest`, `git commit`... khi cần
-- **Web search** — Tìm DuckDuckGo không cần API key để research, tra lỗi
-- **Đọc/ghi file** — Tạo file mới, edit code, refactor theo yêu cầu
-- **Slash commands** — `/add`, `/model`, `/cd`, `/clear`... giống Aider
-- **Multi-provider** — Ollama (local), Groq (free cloud), OpenRouter, bất kỳ OpenAI-compatible API
+> Claude Code / Cursor for your local machine, free, works with any model.
 
 ---
 
-## Cài đặt nhanh
+## Features
+
+- **Read & understand codebase** — Automatically reads project structure, README, package.json on startup
+- **Run bash commands** — AI runs `npm install`, `pytest`, `git commit`... when needed
+- **Web search** — DuckDuckGo search with no API key required for research and debugging
+- **Read/write files** — Create new files, edit code, refactor on demand
+- **Slash commands** — `/add`, `/model`, `/cd`, `/clear`... similar to Aider
+- **Multi-provider** — Ollama (local), Groq (free cloud), OpenRouter, any OpenAI-compatible API
+
+---
+
+## Quick Setup
 
 ```bash
 git clone <repo> localai
@@ -23,35 +23,35 @@ cd localai
 bash setup.sh
 ```
 
-Script sẽ tự:
-1. Tạo virtual environment
-2. Cài tất cả dependencies
-3. Tạo launcher `./localai`
-4. Pull model `qwen2.5:7b` nếu Ollama đã cài
+The script will automatically:
+1. Create a virtual environment
+2. Install all dependencies
+3. Create the `./localai` launcher
+4. Pull the `qwen2.5:7b` model if Ollama is installed
 
 ---
 
-## Cách chạy
+## Usage
 
 ```bash
-# Dùng Ollama (mặc định, cần cài Ollama trước)
+# Use Ollama (default, requires Ollama to be installed)
 ./localai
 
-# Chọn model nhẹ hơn
+# Choose a lighter model
 ./localai --model qwen2.5:3b
 ./localai --model llama3.2:3b
 ./localai --model phi4-mini
 
-# Dùng Groq (miễn phí, không cần GPU — đăng ký tại console.groq.com)
+# Use Groq (free, no GPU needed — sign up at console.groq.com)
 ./localai \
   --base-url https://api.groq.com/openai/v1 \
   --api-key gsk_xxxx \
   --model llama-3.3-70b-versatile
 
-# One-shot (không interactive)
-./localai --prompt "Giải thích file main.py làm gì"
+# One-shot (non-interactive)
+./localai --prompt "Explain what main.py does"
 
-# Xem config hiện tại
+# View current config
 ./localai --config
 ```
 
@@ -59,44 +59,44 @@ Script sẽ tự:
 
 ## Slash Commands
 
-| Command | Mô tả |
-|---------|-------|
-| `/help` | Hiện menu này |
-| `/clear` | Xóa conversation history |
-| `/model <tên>` | Đổi model đang dùng |
-| `/add <file>` | Thêm file vào context (AI sẽ đọc kỹ file đó) |
-| `/files` | Xem files đang trong context |
-| `/cd <path>` | Đổi working directory |
-| `/config` | Xem cấu hình hiện tại |
-| `/tokens` | Ước tính tokens đang dùng |
-| `/save` | Lưu config ra file |
-| `/exit` | Thoát |
+| Command | Description |
+|---------|-------------|
+| `/help` | Show this menu |
+| `/clear` | Clear conversation history |
+| `/model <name>` | Switch the active model |
+| `/add <file>` | Add a file to context (AI will read it carefully) |
+| `/files` | View files currently in context |
+| `/cd <path>` | Change working directory |
+| `/config` | View current configuration |
+| `/tokens` | Estimate current token usage |
+| `/save` | Save config to file |
+| `/exit` | Quit |
 
 ---
 
-## Cấu hình
+## Configuration
 
-Tạo file `~/.config/localai/config.yaml`:
+Create a file at `~/.config/localai/config.yaml`:
 
 ```yaml
-# Model mặc định
+# Default model
 model: qwen2.5:7b
 base_url: http://localhost:11434/v1
 api_key: ollama
 
-# Hoặc dùng Groq
+# Or use Groq
 # model: llama-3.3-70b-versatile
 # base_url: https://api.groq.com/openai/v1
 # api_key: gsk_xxxx
 
-# Cài đặt
+# Settings
 max_tokens: 8192
-temperature: 0.1          # Thấp = consistent hơn khi code
-max_iterations: 30        # Số vòng tool-calling tối đa
-show_tool_calls: true     # Hiện AI đang gọi tool gì
+temperature: 0.1          # Lower = more consistent for coding
+max_iterations: 30        # Max tool-calling loops
+show_tool_calls: true     # Show which tools AI is calling
 ```
 
-Hoặc dùng env vars:
+Or use environment variables:
 ```bash
 export LOCALAI_MODEL=llama3.2
 export LOCALAI_BASE_URL=http://localhost:11434/v1
@@ -105,49 +105,49 @@ export LOCALAI_API_KEY=ollama
 
 ---
 
-## Model gợi ý
+## Recommended Models
 
-### Chạy local (Ollama)
+### Local (Ollama)
 
-| Model | RAM cần | Chất lượng | Ghi chú |
-|-------|---------|------------|---------|
-| `qwen2.5:7b` | 6GB | ⭐⭐⭐⭐ | Khuyên dùng, hỗ trợ tiếng Việt |
-| `qwen2.5-coder:7b` | 6GB | ⭐⭐⭐⭐⭐ | Tốt nhất cho coding |
-| `llama3.2:3b` | 3GB | ⭐⭐⭐ | Nhẹ, máy yếu |
-| `phi4-mini` | 3GB | ⭐⭐⭐⭐ | Microsoft, nhỏ nhưng mạnh |
-| `deepseek-r1:7b` | 6GB | ⭐⭐⭐⭐ | Tốt cho reasoning/logic |
+| Model | RAM Required | Quality | Notes |
+|-------|-------------|---------|-------|
+| `qwen2.5:7b` | 6GB | ⭐⭐⭐⭐ | Recommended, multilingual support |
+| `qwen2.5-coder:7b` | 6GB | ⭐⭐⭐⭐⭐ | Best for coding |
+| `llama3.2:3b` | 3GB | ⭐⭐⭐ | Lightweight, for low-end machines |
+| `phi4-mini` | 3GB | ⭐⭐⭐⭐ | Microsoft, small but powerful |
+| `deepseek-r1:7b` | 6GB | ⭐⭐⭐⭐ | Great for reasoning/logic |
 
 ```bash
-# Cài model
+# Install a model
 ollama pull qwen2.5:7b
 ollama pull qwen2.5-coder:7b
 ```
 
-### Cloud miễn phí (không cần GPU)
+### Free Cloud (no GPU needed)
 
-| Provider | URL | Cách lấy key |
-|----------|-----|--------------|
+| Provider | URL | How to get a key |
+|----------|-----|-----------------|
 | **Groq** | `https://api.groq.com/openai/v1` | console.groq.com |
 | **Google AI Studio** | `https://generativelanguage.googleapis.com/v1beta/openai/` | aistudio.google.com |
-| **OpenRouter** | `https://openrouter.ai/api/v1` | openrouter.ai (nhiều model free) |
+| **OpenRouter** | `https://openrouter.ai/api/v1` | openrouter.ai (many free models) |
 
 ---
 
-## Cấu trúc project
+## Project Structure
 
 ```
 localai/
 ├── main.py       # Entry point, REPL loop, slash commands
-├── agent.py      # Core agent loop (tool-calling với LLM)
-├── tools.py      # Tất cả tools: file, bash, search, web
-├── context.py    # Build system prompt từ codebase context
-├── display.py    # Terminal UI với Rich
+├── agent.py      # Core agent loop (tool-calling with LLM)
+├── tools.py      # All tools: file, bash, search, web
+├── context.py    # Build system prompt from codebase context
+├── display.py    # Terminal UI with Rich
 ├── config.py     # Config management
 ├── requirements.txt
 └── setup.sh
 ```
 
-### Luồng hoạt động
+### How It Works
 
 ```
 User input
@@ -156,32 +156,32 @@ User input
 [agent.py] Build messages (system prompt + history)
     │
     ▼
-[LLM] Suy nghĩ → có thể gọi tool
+[LLM] Think → may call tools
     │
     ├─ tool_call? ──► [tools.py] Execute tool
     │                     │
-    │                     └──► Kết quả → back to LLM
+    │                     └──► Result → back to LLM
     │
     └─ text response ──► [display.py] Render → User
 ```
 
 ---
 
-## Mở rộng thêm tools
+## Adding Custom Tools
 
-Thêm tool mới vào `tools.py`:
+Add a new tool in `tools.py`:
 
 ```python
-# 1. Viết function
+# 1. Write the function
 def my_tool(param: str) -> str:
-    return "kết quả"
+    return "result"
 
-# 2. Thêm schema
+# 2. Add the schema
 TOOL_SCHEMAS.append({
     "type": "function",
     "function": {
         "name": "my_tool",
-        "description": "Mô tả để LLM biết khi nào dùng tool này",
+        "description": "Description so the LLM knows when to use this tool",
         "parameters": {
             "type": "object",
             "properties": {
@@ -192,17 +192,17 @@ TOOL_SCHEMAS.append({
     },
 })
 
-# 3. Đăng ký handler
+# 3. Register the handler
 TOOL_HANDLERS["my_tool"] = my_tool
 ```
 
 ---
 
-## Ý tưởng mở rộng tiếp theo
+## Future Ideas
 
-- **Memory** — Lưu context giữa các session bằng SQLite
-- **RAG** — Index codebase lớn bằng embeddings (ChromaDB + nomic-embed)
-- **Git integration** — Auto commit, tạo PR, review diff
-- **Streaming** — Stream response thay vì chờ toàn bộ
-- **MCP support** — Kết nối với MCP servers (Jira, Slack, Notion...)
-- **Vision** — Nhận diện screenshot/hình ảnh với model multimodal
+- **Memory** — Persist context across sessions with SQLite
+- **RAG** — Index large codebases with embeddings (ChromaDB + nomic-embed)
+- **Git integration** — Auto commit, create PRs, review diffs
+- **Streaming** — Stream responses instead of waiting for the full output
+- **MCP support** — Connect to MCP servers (Jira, Slack, Notion...)
+- **Vision** — Recognize screenshots/images with multimodal models
