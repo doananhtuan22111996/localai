@@ -274,7 +274,145 @@ def fetch_url(url: str) -> str:
 
 
 # ════════════════════════════════════════════════════════════════
-# 4. TOOL REGISTRY — schema definitions for LLM
+# 4. GIT OPERATIONS
+# ════════════════════════════════════════════════════════════════
+
+def git_status() -> str:
+    """Get structured git status: branch, staged, unstaged, untracked."""
+    try:
+        parts = []
+        # Current branch
+        branch = subprocess.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            stderr=subprocess.DEVNULL, text=True, cwd=os.getcwd(),
+        ).strip()
+        parts.append(f"Branch: {branch}")
+
+        # Status
+        status = subprocess.check_output(
+            ["git", "status", "--short"],
+            stderr=subprocess.DEVNULL, text=True, cwd=os.getcwd(),
+        ).strip()
+
+        if not status:
+            parts.append("Working tree clean.")
+            return "\n".join(parts)
+
+        staged, unstaged, untracked = [], [], []
+        for line in status.splitlines():
+            index_status = line[0] if len(line) > 0 else " "
+            work_status = line[1] if len(line) > 1 else " "
+            filename = line[3:]
+            if index_status != " " and index_status != "?":
+                staged.append(f"  {index_status} {filename}")
+            if work_status != " " and work_status != "?":
+                unstaged.append(f"  {work_status} {filename}")
+            if index_status == "?":
+                untracked.append(f"  {filename}")
+
+        if staged:
+            parts.append(f"Staged ({len(staged)}):\n" + "\n".join(staged))
+        if unstaged:
+            parts.append(f"Unstaged ({len(unstaged)}):\n" + "\n".join(unstaged))
+        if untracked:
+            parts.append(f"Untracked ({len(untracked)}):\n" + "\n".join(untracked))
+
+        return "\n".join(parts)
+    except subprocess.CalledProcessError:
+        return "[Error] Not a git repository."
+    except Exception as e:
+        return f"[Error] {e}"
+
+
+def git_diff(file: str = None) -> str:
+    """Get git diff (staged + unstaged). Optionally filter by file."""
+    try:
+        cmd = ["git", "diff"]
+        if file:
+            cmd.append(file)
+
+        # Unstaged changes
+        unstaged = subprocess.check_output(
+            cmd, stderr=subprocess.DEVNULL, text=True, cwd=os.getcwd(),
+        ).strip()
+
+        # Staged changes
+        cmd_staged = ["git", "diff", "--cached"]
+        if file:
+            cmd_staged.append(file)
+        staged = subprocess.check_output(
+            cmd_staged, stderr=subprocess.DEVNULL, text=True, cwd=os.getcwd(),
+        ).strip()
+
+        parts = []
+        if staged:
+            parts.append(f"=== Staged changes ===\n{staged}")
+        if unstaged:
+            parts.append(f"=== Unstaged changes ===\n{unstaged}")
+        if not parts:
+            return "No changes detected."
+
+        result = "\n\n".join(parts)
+        if len(result) > 5000:
+            result = result[:5000] + "\n... (diff truncated)"
+        return result
+    except Exception as e:
+        return f"[Error] {e}"
+
+
+def git_log(n: int = 10) -> str:
+    """Get recent git commit history."""
+    try:
+        log = subprocess.check_output(
+            ["git", "log", f"--oneline", f"-{n}", "--decorate"],
+            stderr=subprocess.DEVNULL, text=True, cwd=os.getcwd(),
+        ).strip()
+        return log if log else "No commits yet."
+    except subprocess.CalledProcessError:
+        return "[Error] Not a git repository."
+    except Exception as e:
+        return f"[Error] {e}"
+
+
+def git_commit(message: str, files: str = None) -> str:
+    """Create a git commit. Optionally specify files to stage (space-separated)."""
+    try:
+        # Stage files
+        if files:
+            file_list = files.split()
+            subprocess.check_output(
+                ["git", "add"] + file_list,
+                stderr=subprocess.PIPE, text=True, cwd=os.getcwd(),
+            )
+        else:
+            # Stage all tracked changes
+            subprocess.check_output(
+                ["git", "add", "-u"],
+                stderr=subprocess.PIPE, text=True, cwd=os.getcwd(),
+            )
+
+        # Check if there's anything to commit
+        status = subprocess.check_output(
+            ["git", "status", "--porcelain"],
+            stderr=subprocess.DEVNULL, text=True, cwd=os.getcwd(),
+        ).strip()
+        if not status:
+            return "[Warning] Nothing to commit."
+
+        # Commit
+        result = subprocess.check_output(
+            ["git", "commit", "-m", message],
+            stderr=subprocess.PIPE, text=True, cwd=os.getcwd(),
+        ).strip()
+        return f"[OK] {result}"
+    except subprocess.CalledProcessError as e:
+        return f"[Error] Commit failed: {e.stderr or e.stdout}"
+    except Exception as e:
+        return f"[Error] {e}"
+
+
+# ════════════════════════════════════════════════════════════════
+# 5. TOOL REGISTRY — schema definitions for LLM
 # ════════════════════════════════════════════════════════════════
 
 TOOL_SCHEMAS = [
@@ -381,6 +519,55 @@ TOOL_SCHEMAS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "git_status",
+            "description": "Get git status: current branch, staged/unstaged/untracked files. Use to understand the current state before committing.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "git_diff",
+            "description": "Get git diff showing staged and unstaged changes. Use to review what has changed before committing.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file": {"type": "string", "description": "Optional file path to diff (default: all files)"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "git_log",
+            "description": "Get recent git commit history. Use to understand project progress and recent changes.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "n": {"type": "integer", "description": "Number of commits to show (default 10)"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "git_commit",
+            "description": "Create a git commit. Always run git_status and git_diff first to understand what you're committing.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string", "description": "Commit message"},
+                    "files":   {"type": "string", "description": "Space-separated file paths to stage (default: all tracked changes)"},
+                },
+                "required": ["message"],
+            },
+        },
+    },
 ]
 
 # Map tool name → function handler
@@ -392,6 +579,10 @@ TOOL_HANDLERS: dict[str, Any] = {
     "run_bash":        run_bash,
     "web_search":      web_search,
     "fetch_url":       fetch_url,
+    "git_status":      git_status,
+    "git_diff":        git_diff,
+    "git_log":         git_log,
+    "git_commit":      git_commit,
 }
 
 
