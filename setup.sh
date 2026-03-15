@@ -47,17 +47,20 @@ echo ""
 echo "━━━ Check Ollama ━━━━━━━━━━━━━━━━━━━━━━━━"
 if command -v ollama &>/dev/null; then
     echo "✓ Ollama installed"
-    # Check models
-    for model in "qwen2.5:7b" "llama3.2"; do
-        model_base="${model%%:*}"
-        if ollama list 2>/dev/null | grep -q "$model_base"; then
-            echo "✓ Model $model available"
-        else
-            echo "→ Pulling model $model (first time may take a few minutes)..."
-            ollama pull "$model"
-            echo "✓ Model $model ready"
-        fi
-    done
+    # List available models
+    MODELS=$(ollama list 2>/dev/null | tail -n +2 | awk '{print $1}')
+    if [ -n "$MODELS" ]; then
+        echo ""
+        echo "  Available models:"
+        while IFS= read -r model; do
+            echo "    • $model"
+        done <<< "$MODELS"
+    else
+        echo ""
+        echo "  No models found. Pulling default model..."
+        ollama pull qwen2.5:7b
+        echo "  ✓ qwen2.5:7b ready"
+    fi
 else
     echo ""
     echo "⚠  Ollama is not installed."
