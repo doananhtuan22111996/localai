@@ -8,13 +8,45 @@ The heart of LocalAI:
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
+from pathlib import Path
 from openai import OpenAI
 from config import Config
 from context import build_system_prompt
 from tools import TOOL_SCHEMAS, execute_tool
 import display
+
+# Image extensions supported by vision models
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+
+def _is_image_file(path: str) -> bool:
+    """Check if a file path is an image."""
+    return Path(path).suffix.lower() in IMAGE_EXTENSIONS
+
+def _encode_image_base64(path: str) -> str | None:
+    """Read an image file and return its base64 encoding."""
+    try:
+        p = Path(path)
+        if not p.exists():
+            return None
+        data = p.read_bytes()
+        return base64.b64encode(data).decode("utf-8")
+    except Exception:
+        return None
+
+def _get_image_media_type(path: str) -> str:
+    """Get the MIME type for an image file."""
+    ext = Path(path).suffix.lower()
+    return {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+        ".bmp": "image/bmp",
+    }.get(ext, "image/png")
 
 
 class Agent:
@@ -35,18 +67,23 @@ class Agent:
         Send message and receive response (may call multiple tools).
         Returns: final response text from AI.
         """
-        # Add user message to history
-        self.history.append({"role": "user", "content": user_message})
+        # Build message content — may include images for vision
+        has_images = any(_is_image_file(f) for f in self.context_files)
 
-        # Add context files to message if available
-        if self.context_files:
-            context_content = self._load_context_files()
-            if context_content:
-                # Inject into last message
-                self.history[-1]["content"] = (
-                    f"{user_message}\n\n"
-                    f"[Context files added]\n{context_content}"
-                )
+        if has_images:
+            # Build multimodal content array (OpenAI vision format)
+            content_parts = self._build_multimodal_content(user_message)
+            self.history.append({"role": "user", "content": content_parts})
+        else:
+            self.history.append({"role": "user", "content": user_message})
+            # Add text context files to message if available
+            if self.context_files:
+                context_content = self._load_context_files()
+                if context_content:
+                    self.history[-1]["content"] = (
+                        f"{user_message}\n\n"
+                        f"[Context files added]\n{context_content}"
+                    )
 
         response_text = self._run_agent_loop()
         return response_text
@@ -57,8 +94,7 @@ class Agent:
         display.print_info("Conversation history cleared.")
 
     def add_context_file(self, path: str):
-        """Add file to context (similar to /add in Aider)."""
-        from pathlib import Path
+        """Add file to context (similar to /add in Aider). Supports images for vision models."""
         p = Path(path)
         if not p.is_absolute():
             p = Path(self._cwd) / p
@@ -67,7 +103,8 @@ class Agent:
             return
         if str(p) not in self.context_files:
             self.context_files.append(str(p))
-            display.print_success(f"Added: {p.name}")
+            file_type = "image" if _is_image_file(str(p)) else "file"
+            display.print_success(f"Added {file_type}: {p.name}")
         else:
             display.print_info(f"File already in context: {p.name}")
 
@@ -216,6 +253,43 @@ class Agent:
             {"role": "system", "content": system_prompt},
             *self.history,
         ]
+
+    def _build_multimodal_content(self, user_message: str) -> list[dict]:
+        """Build a multimodal content array with text and images (OpenAI vision format)."""
+        parts = []
+
+        # Text part: user message + any text context files
+        text_files = [f for f in self.context_files if not _is_image_file(f)]
+        text_content = user_message
+        if text_files:
+            file_contents = []
+            for fpath in text_files:
+                try:
+                    p = Path(fpath)
+                    if p.exists():
+                        content = p.read_text(encoding="utf-8", errors="replace")
+                        file_contents.append(f"--- {p.name} ---\n{content}")
+                except Exception as e:
+                    file_contents.append(f"--- {fpath} --- [Read error: {e}]")
+            if file_contents:
+                text_content += "\n\n[Context files added]\n" + "\n\n".join(file_contents)
+
+        parts.append({"type": "text", "text": text_content})
+
+        # Image parts
+        for fpath in self.context_files:
+            if _is_image_file(fpath):
+                b64 = _encode_image_base64(fpath)
+                if b64:
+                    media_type = _get_image_media_type(fpath)
+                    parts.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{media_type};base64,{b64}",
+                        },
+                    })
+
+        return parts
 
     def _load_context_files(self) -> str:
         """Read the contents of /add-ed context files."""
