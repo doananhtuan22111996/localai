@@ -127,13 +127,21 @@ class Agent:
 
             self._trim_history()
 
-            # Call LLM
+            # Call LLM (stream only when expecting a text reply, not during tool loops)
+            use_stream = self.config.stream and iteration > 1 or self.config.stream
             try:
-                response = self._call_llm()
+                if use_stream:
+                    result = self._run_streaming_turn()
+                    if result is not None:
+                        # Got a final text response via streaming
+                        final_response = result
+                        break
+                    # result is None means tool calls were handled, continue loop
+                    continue
+                else:
+                    response = self._call_llm(stream=False)
             except Exception as e:
                 error_str = str(e)
-                # Groq/strict providers reject malformed tool args server-side.
-                # Feed the error back so the LLM can retry with correct types.
                 if "tool_use_failed" in error_str or "tool call validation" in error_str:
                     display.print_info("Tool call had invalid parameters, retrying...")
                     self.history.append({
@@ -154,46 +162,137 @@ class Agent:
                     "role": "assistant",
                     "content": final_response
                 })
-
-                # Display response
-                if self.config.stream:
-                    display.print_assistant_response(final_response)
+                display.print_assistant_response(final_response)
                 break
 
             # Has tool call → execute each tool
-            self.history.append(self._message_to_dict(message))
-
-            for tool_call in message.tool_calls:
-                tool_name = tool_call.function.name
-                try:
-                    arguments = json.loads(tool_call.function.arguments)
-                except json.JSONDecodeError:
-                    arguments = {}
-
-                # Show tool being called
-                if self.config.show_tool_calls:
-                    display.print_tool_call(tool_name, arguments)
-
-                # Execute tool
-                result = execute_tool(tool_name, arguments)
-
-                # Show tool result
-                if self.config.show_tool_calls:
-                    display.print_tool_result(tool_name, result)
-
-                # Add tool result to history
-                self.history.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": result,
-                })
+            self._handle_tool_calls(message)
 
         if iteration >= self.config.max_iterations:
             display.print_error(f"Reached limit of {self.config.max_iterations} iterations.")
 
         return final_response
 
-    def _call_llm(self):
+    def _run_streaming_turn(self) -> str | None:
+        """
+        Run one LLM turn with streaming.
+        Returns the final text if it's a text response, or None if tool calls were handled.
+        """
+        stream = self._call_llm(stream=True)
+
+        # Accumulate chunks to detect tool calls vs text
+        collected_content = ""
+        collected_tool_calls: dict[int, dict] = {}  # index → {id, name, arguments_str}
+        started_text_stream = False
+
+        for chunk in stream:
+            delta = chunk.choices[0].delta
+
+            # Accumulate tool call deltas
+            if delta.tool_calls:
+                for tc_delta in delta.tool_calls:
+                    idx = tc_delta.index
+                    if idx not in collected_tool_calls:
+                        collected_tool_calls[idx] = {
+                            "id": tc_delta.id or "",
+                            "name": tc_delta.function.name if tc_delta.function and tc_delta.function.name else "",
+                            "arguments": tc_delta.function.arguments if tc_delta.function and tc_delta.function.arguments else "",
+                        }
+                    else:
+                        if tc_delta.id:
+                            collected_tool_calls[idx]["id"] = tc_delta.id
+                        if tc_delta.function:
+                            if tc_delta.function.name:
+                                collected_tool_calls[idx]["name"] += tc_delta.function.name
+                            if tc_delta.function.arguments:
+                                collected_tool_calls[idx]["arguments"] += tc_delta.function.arguments
+
+            # Stream text content
+            if delta.content:
+                if not started_text_stream:
+                    display.print_assistant_stream_start()
+                    started_text_stream = True
+                display.print_stream_chunk(delta.content)
+                collected_content += delta.content
+
+        # If we streamed text, finish it
+        if started_text_stream:
+            display.print_stream_end()
+
+        # Handle tool calls if any
+        if collected_tool_calls:
+            # Build a fake message-like object for _handle_tool_calls_from_stream
+            assistant_msg = {"role": "assistant", "content": collected_content or None}
+            tool_calls_list = []
+            for idx in sorted(collected_tool_calls.keys()):
+                tc = collected_tool_calls[idx]
+                tool_calls_list.append({
+                    "id": tc["id"],
+                    "type": "function",
+                    "function": {
+                        "name": tc["name"],
+                        "arguments": tc["arguments"],
+                    },
+                })
+            assistant_msg["tool_calls"] = tool_calls_list
+            self.history.append(assistant_msg)
+
+            # Execute each tool
+            for tc in tool_calls_list:
+                tool_name = tc["function"]["name"]
+                try:
+                    arguments = json.loads(tc["function"]["arguments"])
+                except json.JSONDecodeError:
+                    arguments = {}
+
+                if self.config.show_tool_calls:
+                    display.print_tool_call(tool_name, arguments)
+
+                result = execute_tool(tool_name, arguments)
+
+                if self.config.show_tool_calls:
+                    display.print_tool_result(tool_name, result)
+
+                self.history.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "content": result,
+                })
+            return None  # Signal to continue the loop
+
+        # Pure text response
+        self.history.append({
+            "role": "assistant",
+            "content": collected_content
+        })
+        return collected_content
+
+    def _handle_tool_calls(self, message):
+        """Execute tool calls from a non-streamed response message."""
+        self.history.append(self._message_to_dict(message))
+
+        for tool_call in message.tool_calls:
+            tool_name = tool_call.function.name
+            try:
+                arguments = json.loads(tool_call.function.arguments)
+            except json.JSONDecodeError:
+                arguments = {}
+
+            if self.config.show_tool_calls:
+                display.print_tool_call(tool_name, arguments)
+
+            result = execute_tool(tool_name, arguments)
+
+            if self.config.show_tool_calls:
+                display.print_tool_result(tool_name, result)
+
+            self.history.append({
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "content": result,
+            })
+
+    def _call_llm(self, stream: bool = False):
         """Call LLM API with full conversation history."""
         messages = self._build_messages()
 
@@ -204,6 +303,7 @@ class Agent:
             tool_choice="auto",
             max_tokens=self.config.max_tokens,
             temperature=self.config.temperature,
+            stream=stream,
         )
 
     def _build_messages(self) -> list[dict]:
