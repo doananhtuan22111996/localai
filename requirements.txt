@@ -14,4 +14,7 @@ requests>=2.31.0            # HTTP client để fetch URLs
 beautifulsoup4>=4.12.3      # Parse HTML khi fetch web pages
 
 # ── Config ─────────────────────────────────────────────────────
-pyyaml>=6.0.1               # Đọc/ghi config file YAML
+pyyaml>=6.0.1               # Read/write YAML config file
+
+# ── RAG (optional) ────────────────────────────────────────────
+chromadb>=0.4.0              # Vector DB for semantic search (requires: ollama pull nomic-embed-text)

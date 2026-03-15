@@ -126,7 +126,30 @@ def handle_slash_command(cmd: str, agent: Agent, config: Config) -> bool:
         display.print_success(f"Config saved to ~/.config/localai/config.yaml")
         return True
 
+    elif command == "/index":
+        _handle_index_command(args)
+        return True
+
     return False
+
+
+def _handle_index_command(args: str):
+    """Handle /index command to build RAG index for current directory."""
+    try:
+        from rag import index_directory
+    except ImportError:
+        display.print_error("RAG dependencies not installed. Run: pip install chromadb")
+        return
+
+    directory = args.strip() or os.getcwd()
+    display.print_info(f"Indexing {directory}... (this may take a moment)")
+    result = index_directory(directory)
+    if result.startswith("[OK]"):
+        display.print_success(result)
+    elif result.startswith("[Warning]"):
+        display.print_info(result)
+    else:
+        display.print_error(result)
 
 
 def _apply_preset(agent: Agent, config: Config, preset: dict):

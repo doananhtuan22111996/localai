@@ -381,17 +381,42 @@ TOOL_SCHEMAS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "semantic_search",
+            "description": "Search the codebase using semantic similarity (RAG). Better than text search for finding related code by meaning. Requires /index to be run first.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query":  {"type": "string", "description": "Natural language query describing what you're looking for"},
+                    "top_k":  {"type": "integer", "description": "Number of results to return (default 5)"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
 ]
+
+def _semantic_search_wrapper(query: str, top_k: int = 5) -> str:
+    """Wrapper for rag.semantic_search to use as a tool."""
+    try:
+        from rag import semantic_search
+        return semantic_search(query, top_k=top_k)
+    except ImportError:
+        return "[Error] RAG dependencies not installed. Run: pip install chromadb"
+
 
 # Map tool name → function handler
 TOOL_HANDLERS: dict[str, Any] = {
-    "read_file":       read_file,
-    "write_file":      write_file,
-    "list_directory":  list_directory,
-    "search_in_files": search_in_files,
-    "run_bash":        run_bash,
-    "web_search":      web_search,
-    "fetch_url":       fetch_url,
+    "read_file":        read_file,
+    "write_file":       write_file,
+    "list_directory":   list_directory,
+    "search_in_files":  search_in_files,
+    "run_bash":         run_bash,
+    "web_search":       web_search,
+    "fetch_url":        fetch_url,
+    "semantic_search":  _semantic_search_wrapper,
 }
 
 
