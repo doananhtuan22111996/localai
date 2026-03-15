@@ -33,9 +33,11 @@ PRIORITY_FILES = {
     # Android / Gradle
     "build.gradle", "build.gradle.kts",
     "settings.gradle", "settings.gradle.kts",
-    "gradle.properties", "local.properties",
+    "gradle.properties",
     "app/build.gradle", "app/build.gradle.kts",
     "app/src/main/AndroidManifest.xml",
+    "gradle/libs.versions.toml", "gradle/libsCustom.versions.toml",
+    "CLAUDE.md", "CHANGELOG.md",
 }
 
 IGNORE_DIRS = {
@@ -46,6 +48,8 @@ IGNORE_DIRS = {
     "Pods", "DerivedData", "*.xcodeproj", "*.xcworkspace",
     # Android / Gradle
     ".gradle", ".idea", "*.apk", "*.aab",
+    # Fastlane / misc
+    "fastlane",
 }
 
 
