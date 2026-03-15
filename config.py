@@ -2,13 +2,37 @@
 config.py — Configuration management for LocalAI
 Supports: YAML config file + env variable override
 """
+from __future__ import annotations
+
 import os
 import yaml
 import dataclasses
 from pathlib import Path
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 CONFIG_PATH = Path.home() / ".config" / "localai" / "config.yaml"
+
+# ── Model Presets ─────────────────────────────────────────────
+MODEL_PRESETS = [
+    {
+        "name": "Ollama — qwen2.5:7b (local)",
+        "model": "qwen2.5:7b",
+        "base_url": "http://localhost:11434/v1",
+        "api_key": "ollama",
+    },
+    {
+        "name": "Ollama — llama3.2 (local)",
+        "model": "llama3.2",
+        "base_url": "http://localhost:11434/v1",
+        "api_key": "ollama",
+    },
+    {
+        "name": "Groq — llama-3.3-70b-versatile (cloud)",
+        "model": "llama-3.3-70b-versatile",
+        "base_url": "https://api.groq.com/openai/v1",
+        "api_key": os.environ.get("GROQ_API_KEY", ""),
+    },
+]
 
 
 @dataclass
@@ -48,18 +72,24 @@ class Config:
 
         # Env var overrides — convenient when switching between projects
         env_map = {
-            "LOCALAI_MODEL":       "model",
-            "LOCALAI_BASE_URL":    "base_url",
-            "LOCALAI_API_KEY":     "api_key",
-            "LOCALAI_MAX_TOKENS":  "max_tokens",
-            "LOCALAI_STREAM":      "stream",
+            "LOCALAI_MODEL":       ("model",      str),
+            "LOCALAI_BASE_URL":    ("base_url",   str),
+            "LOCALAI_API_KEY":     ("api_key",    str),
+            "LOCALAI_MAX_TOKENS":  ("max_tokens", int),
+            "LOCALAI_STREAM":      ("stream",     lambda v: v.lower() in ("1", "true", "yes")),
         }
-        for env_key, field_name in env_map.items():
+        for env_key, (field_name, coerce) in env_map.items():
             if val := os.environ.get(env_key):
-                data[field_name] = val
+                data[field_name] = coerce(val)
 
         valid = cls.__dataclass_fields__.keys()
         return cls(**{k: v for k, v in data.items() if k in valid})
+
+    def apply_preset(self, preset: dict):
+        """Apply a model preset to this config."""
+        self.model = preset["model"]
+        self.base_url = preset["base_url"]
+        self.api_key = preset["api_key"]
 
     def save(self):
         """Save current config to file."""

@@ -6,6 +6,8 @@ The heart of LocalAI:
   3. If LLM wants to call a tool → execute → feed result back to LLM
   4. Repeat until LLM returns a final text response
 """
+from __future__ import annotations
+
 import json
 import os
 from openai import OpenAI
@@ -84,6 +86,34 @@ class Agent:
 
     # ── Private: Agent Loop ───────────────────────────────────────
 
+    @staticmethod
+    def _message_to_dict(message) -> dict:
+        """Convert an OpenAI SDK message object to a plain dict for history."""
+        msg = {"role": message.role}
+        if message.content:
+            msg["content"] = message.content
+        if message.tool_calls:
+            msg["tool_calls"] = [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    },
+                }
+                for tc in message.tool_calls
+            ]
+        return msg
+
+    def _trim_history(self):
+        """Keep history under a rough token budget by dropping old turns."""
+        max_chars = self.config.max_tokens * 3  # ~3 chars/token, conservative
+        total = sum(len(str(m.get("content", ""))) for m in self.history)
+        while total > max_chars and len(self.history) > 2:
+            removed = self.history.pop(0)
+            total -= len(str(removed.get("content", "")))
+
     def _run_agent_loop(self) -> str:
         """
         Tool-calling loop:
@@ -95,8 +125,26 @@ class Agent:
         while iteration < self.config.max_iterations:
             iteration += 1
 
+            self._trim_history()
+
             # Call LLM
-            response = self._call_llm()
+            try:
+                response = self._call_llm()
+            except Exception as e:
+                error_str = str(e)
+                # Groq/strict providers reject malformed tool args server-side.
+                # Feed the error back so the LLM can retry with correct types.
+                if "tool_use_failed" in error_str or "tool call validation" in error_str:
+                    display.print_info("Tool call had invalid parameters, retrying...")
+                    self.history.append({
+                        "role": "user",
+                        "content": (
+                            "[System] Your previous tool call was rejected by the API: "
+                            f"{error_str}. Please retry with correct parameter types."
+                        ),
+                    })
+                    continue
+                raise
             message = response.choices[0].message
 
             # No tool call → AI is returning final text response
@@ -113,7 +161,7 @@ class Agent:
                 break
 
             # Has tool call → execute each tool
-            self.history.append(message)  # Save message with tool_calls
+            self.history.append(self._message_to_dict(message))
 
             for tool_call in message.tool_calls:
                 tool_name = tool_call.function.name

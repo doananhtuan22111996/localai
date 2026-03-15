@@ -16,7 +16,7 @@ from pathlib import Path
 # Add current directory to Python path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from config import Config
+from config import Config, MODEL_PRESETS
 from agent import Agent
 import display
 
@@ -77,14 +77,21 @@ def handle_slash_command(cmd: str, agent: Agent, config: Config) -> bool:
     elif command == "/model":
         if not args:
             display.print_info(f"Current model: {config.model}")
-            display.print_info("Usage: /model <model-name>")
+            display.print_info("Usage: /model <model-name>  or  /models to pick from presets")
         else:
             config.model = args
-            # Update agent's client
             from openai import OpenAI
             agent.client = OpenAI(base_url=config.base_url, api_key=config.api_key)
             agent.config = config
             display.print_success(f"Switched model: {args}")
+        return True
+
+    elif command == "/models":
+        choice = display.print_model_menu(MODEL_PRESETS)
+        if choice is not None:
+            _apply_preset(agent, config, MODEL_PRESETS[choice])
+        else:
+            display.print_info(f"Keeping current model: {config.model}")
         return True
 
     elif command == "/add":
@@ -120,6 +127,15 @@ def handle_slash_command(cmd: str, agent: Agent, config: Config) -> bool:
         return True
 
     return False
+
+
+def _apply_preset(agent: Agent, config: Config, preset: dict):
+    """Apply a model preset and reinitialize the agent's client."""
+    config.apply_preset(preset)
+    from openai import OpenAI
+    agent.client = OpenAI(base_url=config.base_url, api_key=config.api_key)
+    agent.config = config
+    display.print_success(f"Switched to: {preset['name']}")
 
 
 def run_interactive(agent: Agent, config: Config):
@@ -165,9 +181,6 @@ def run_interactive(agent: Agent, config: Config):
             # Chat with AI
             display.print_user_message(user_input)
             display.print_separator()
-
-            with display.print_thinking():
-                pass  # Brief spinner to indicate AI is processing
 
             agent.chat(user_input)
             display.print_separator()
@@ -217,6 +230,22 @@ def main():
     if args.config:
         display.print_config(config.show())
         return
+
+    # Show model selection menu (skip if model was specified via CLI args)
+    if not args.model and not args.prompt:
+        choice = display.print_model_menu(MODEL_PRESETS)
+        if choice is not None:
+            preset = MODEL_PRESETS[choice]
+            config.apply_preset(preset)
+            # Prompt for API key if the preset doesn't have one
+            if not config.api_key:
+                display.print_info(f"{preset['name']} requires an API key.")
+                key = display.prompt_api_key()
+                if key:
+                    config.api_key = key
+                else:
+                    display.print_error("No API key provided. Falling back to default.")
+                    config.apply_preset(MODEL_PRESETS[0])
 
     # Check if Ollama is running (when using local)
     if "localhost" in config.base_url or "127.0.0.1" in config.base_url:

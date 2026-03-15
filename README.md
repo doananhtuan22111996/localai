@@ -42,11 +42,18 @@ The script will automatically:
 ./localai --model llama3.2:3b
 ./localai --model phi4-mini
 
-# Use Groq (free, no GPU needed — sign up at console.groq.com)
+# Use Groq via model selection menu (will prompt for API key)
+./localai
+
+# Or use Groq directly via CLI flags
 ./localai \
   --base-url https://api.groq.com/openai/v1 \
   --api-key gsk_xxxx \
   --model llama-3.3-70b-versatile
+
+# Or set env var so the menu preset works automatically
+export GROQ_API_KEY=gsk_xxxx
+./localai
 
 # One-shot (non-interactive)
 ./localai --prompt "Explain what main.py does"
@@ -63,6 +70,7 @@ The script will automatically:
 |---------|-------------|
 | `/help` | Show this menu |
 | `/clear` | Clear conversation history |
+| `/models` | Select model from presets |
 | `/model <name>` | Switch the active model |
 | `/add <file>` | Add a file to context (AI will read it carefully) |
 | `/files` | View files currently in context |

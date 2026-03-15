@@ -2,11 +2,16 @@
 tools.py — All tools the agent can call
 Each tool has: schema (description for LLM) + handler (execution logic)
 """
+from __future__ import annotations
+
 import os
 import json
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
+import ipaddress
 
 
 # ════════════════════════════════════════════════════════════════
@@ -29,12 +34,25 @@ def read_file(path: str) -> str:
         return f"[Error reading file] {e}"
 
 
+def _is_path_safe(p: Path) -> bool:
+    """Check that a resolved path is under the current working directory."""
+    try:
+        resolved = p.resolve()
+        cwd = Path(os.getcwd()).resolve()
+        resolved.relative_to(cwd)
+        return True
+    except ValueError:
+        return False
+
+
 def write_file(path: str, content: str) -> str:
-    """Write content to a file (create new or overwrite)."""
+    """Write content to a file (create new or overwrite). Restricted to cwd."""
     try:
         p = Path(path).expanduser()
         if not p.is_absolute():
             p = Path(os.getcwd()) / p
+        if not _is_path_safe(p):
+            return f"[Blocked] Cannot write outside working directory: {path}"
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
         return f"[OK] Wrote {p.stat().st_size} bytes to {path}"
@@ -123,20 +141,30 @@ def search_in_files(query: str, path: str = ".", file_pattern: str = "*") -> str
 # 2. BASH / SHELL EXECUTION
 # ════════════════════════════════════════════════════════════════
 
-# Blocked commands (dangerous)
-BLOCKED_COMMANDS = [
-    "rm -rf /", "rm -rf ~", "mkfs", "dd if=/dev/zero",
-    ":(){:|:&};:", "fork bomb", "shutdown", "reboot",
+# Patterns that indicate dangerous commands
+BLOCKED_PATTERNS = [
+    r"rm\s+(-\w*f\w*\s+)?(-\w*r\w*\s+)?/(\s|$)",  # rm -rf / variants
+    r"rm\s+(-\w*r\w*\s+)?(-\w*f\w*\s+)?/(\s|$)",
+    r"rm\s+.*~",                                     # rm ~ variants
+    r"mkfs\b",
+    r"dd\s+.*if=/dev/(zero|random|urandom)",
+    r":\(\)\s*\{.*\|.*&\s*\}\s*;",                  # fork bomb
+    r"\bshutdown\b",
+    r"\breboot\b",
+    r"\binit\s+[0-6]\b",
+    r"chmod\s+(-\w+\s+)?777\s+/",                   # chmod 777 /
+    r">\s*/dev/sd[a-z]",                             # overwrite disk
+    r"curl\s+.*\|\s*(ba)?sh",                        # curl pipe to shell
+    r"wget\s+.*\|\s*(ba)?sh",
 ]
 
 
 def run_bash(command: str, timeout: int = 30) -> str:
     """Run a bash command in the current directory."""
-    # Simple safety check
-    cmd_lower = command.lower()
-    for blocked in BLOCKED_COMMANDS:
-        if blocked in cmd_lower:
-            return f"[Blocked] Dangerous command rejected: {blocked}"
+    cmd_lower = command.lower().strip()
+    for pattern in BLOCKED_PATTERNS:
+        if re.search(pattern, cmd_lower):
+            return f"[Blocked] Dangerous command rejected."
 
     try:
         result = subprocess.run(
@@ -154,7 +182,6 @@ def run_bash(command: str, timeout: int = 30) -> str:
             output += f"\n[stderr]\n{result.stderr}"
         if not output.strip():
             return f"[OK] Command finished, no output. Exit code: {result.returncode}"
-        # Limit long output
         if len(output) > 5000:
             output = output[:5000] + "\n... (output truncated)"
         return output
@@ -187,14 +214,42 @@ def web_search(query: str, max_results: int = 8) -> str:
         return f"[Search error] {e}"
 
 
+def _is_url_safe(url: str) -> bool:
+    """Block requests to private/internal networks and non-HTTP schemes."""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        hostname = parsed.hostname or ""
+        if not hostname:
+            return False
+        # Block obvious internal hostnames
+        if hostname in ("localhost", "metadata.google.internal"):
+            return False
+        if hostname.startswith("169.254."):
+            return False
+        # Resolve and check for private IPs
+        import socket
+        for info in socket.getaddrinfo(hostname, None):
+            addr = info[4][0]
+            if ipaddress.ip_address(addr).is_private:
+                return False
+        return True
+    except Exception:
+        return False
+
+
 def fetch_url(url: str) -> str:
     """Fetch content from a URL (extract text, strip HTML)."""
     try:
+        if not _is_url_safe(url):
+            return f"[Blocked] URL targets a private/internal network: {url}"
+
         import requests
         from bs4 import BeautifulSoup
 
         headers = {"User-Agent": "Mozilla/5.0 (compatible; LocalAI/1.0)"}
-        resp = requests.get(url, headers=headers, timeout=10)
+        resp = requests.get(url, headers=headers, timeout=10, allow_redirects=False)
         resp.raise_for_status()
 
         soup = BeautifulSoup(resp.text, "html.parser")
@@ -260,8 +315,8 @@ TOOL_SCHEMAS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path":      {"type": "string", "description": "Directory to list (default: current directory)", "default": "."},
-                    "recursive": {"type": "boolean", "description": "True to view the full directory tree", "default": False},
+                    "path":      {"type": "string", "description": "Directory to list (default: current directory)"},
+                    "recursive": {"type": "boolean", "description": "True to view the full directory tree"},
                 },
             },
         },
@@ -275,8 +330,8 @@ TOOL_SCHEMAS = [
                 "type": "object",
                 "properties": {
                     "query":        {"type": "string", "description": "Text to search for"},
-                    "path":         {"type": "string", "description": "Directory to search in", "default": "."},
-                    "file_pattern": {"type": "string", "description": "File pattern (e.g.: '*.py', '*.js')", "default": "*"},
+                    "path":         {"type": "string", "description": "Directory to search in (default: current directory)"},
+                    "file_pattern": {"type": "string", "description": "File pattern (e.g.: '*.py', '*.js', default: '*')"},
                 },
                 "required": ["query"],
             },
@@ -291,7 +346,7 @@ TOOL_SCHEMAS = [
                 "type": "object",
                 "properties": {
                     "command": {"type": "string", "description": "Shell command to run"},
-                    "timeout": {"type": "integer", "description": "Timeout in seconds (default 30)", "default": 30},
+                    "timeout": {"type": "integer", "description": "Timeout in seconds (default 30)"},
                 },
                 "required": ["command"],
             },
@@ -306,7 +361,7 @@ TOOL_SCHEMAS = [
                 "type": "object",
                 "properties": {
                     "query":       {"type": "string", "description": "Question or keywords to search"},
-                    "max_results": {"type": "integer", "description": "Maximum number of results (default 8)", "default": 8},
+                    "max_results": {"type": "integer", "description": "Maximum number of results (default 8)"},
                 },
                 "required": ["query"],
             },

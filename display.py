@@ -2,6 +2,7 @@
 display.py — Terminal UI with Rich
 Handles all output: markdown, code blocks, tool calls, errors...
 """
+from __future__ import annotations
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -46,6 +47,7 @@ def print_help():
         "[bold]Special commands:[/bold]\n\n"
         "  [cyan]/help[/cyan]           — Show this menu\n"
         "  [cyan]/clear[/cyan]          — Clear conversation history\n"
+        "  [cyan]/models[/cyan]         — Select model from presets\n"
         "  [cyan]/model <name>[/cyan]   — Switch model (e.g.: /model llama3.2)\n"
         "  [cyan]/add <file>[/cyan]     — Add file to context\n"
         "  [cyan]/files[/cyan]          — View files in context\n"
@@ -155,6 +157,42 @@ def print_context_files(files: list[str]):
     console.print("[bold]Files in context:[/bold]")
     for f in files:
         console.print(f"  [cyan]•[/cyan] {f}")
+
+
+def prompt_api_key():
+    """Prompt user for an API key, masking input."""
+    try:
+        key = console.input("[bold cyan]Enter API key › [/bold cyan]").strip()
+        return key if key else None
+    except (EOFError, KeyboardInterrupt):
+        return None
+
+
+def print_model_menu(presets):
+    """Show model selection menu. Returns chosen index or None to use default."""
+    console.print()
+    console.print(Panel.fit(
+        "[bold cyan]Select a model to start:[/bold cyan]",
+        border_style="cyan",
+        padding=(0, 2),
+    ))
+    for i, preset in enumerate(presets, 1):
+        has_key = bool(preset.get("api_key"))
+        key_hint = "" if has_key else " [dim red](API key required)[/dim red]"
+        console.print(f"  [bold yellow]{i}[/bold yellow]) {preset['name']}{key_hint}")
+    console.print(f"  [dim]Press Enter to use default[/dim]")
+    console.print()
+    try:
+        choice = console.input("[bold cyan]Your choice › [/bold cyan]").strip()
+        if not choice:
+            return None
+        idx = int(choice) - 1
+        if 0 <= idx < len(presets):
+            return idx
+        console.print(f"[{CLR_ERROR}]Invalid choice, using default.[/{CLR_ERROR}]")
+        return None
+    except (ValueError, EOFError, KeyboardInterrupt):
+        return None
 
 
 def print_config(config_dict: dict):
