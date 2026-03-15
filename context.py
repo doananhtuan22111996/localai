@@ -11,11 +11,12 @@ from datetime import datetime
 # Common code file extensions (prioritized for reading)
 CODE_EXTENSIONS = {
     ".py", ".js", ".ts", ".jsx", ".tsx", ".go", ".rs", ".java",
-    ".c", ".cpp", ".h", ".cs", ".rb", ".php", ".swift", ".kt",
+    ".c", ".cpp", ".h", ".cs", ".rb", ".php", ".swift", ".kt", ".kts",
     ".vue", ".svelte", ".html", ".css", ".scss",
     ".json", ".yaml", ".yml", ".toml", ".env.example",
     ".md", ".txt", ".sh", ".dockerfile", "Dockerfile",
     ".sql", ".graphql",
+    ".gradle", ".xml", ".pro",
 }
 
 # Special files — always read as they contain important project info
@@ -25,12 +26,20 @@ PRIORITY_FILES = {
     "Makefile", "docker-compose.yml", "docker-compose.yaml",
     ".env.example", "tsconfig.json", "vite.config.js",
     "vite.config.ts", "next.config.js", "next.config.ts",
+    # Android / Gradle
+    "build.gradle", "build.gradle.kts",
+    "settings.gradle", "settings.gradle.kts",
+    "gradle.properties", "local.properties",
+    "app/build.gradle", "app/build.gradle.kts",
+    "app/src/main/AndroidManifest.xml",
 }
 
 IGNORE_DIRS = {
     ".git", "__pycache__", "node_modules", ".venv", "venv", "env",
     "dist", "build", ".next", ".cache", ".pytest_cache", "coverage",
     ".mypy_cache", ".ruff_cache", "*.egg-info",
+    # Android / Gradle
+    ".gradle", ".idea", "*.apk", "*.aab",
 }
 
 
@@ -132,6 +141,9 @@ def _detect_tech_stack(root: Path) -> list[str]:
         "Go":         ["go.mod", "go.sum"],
         "Rust":       ["Cargo.toml", "Cargo.lock"],
         "Docker":     ["Dockerfile", "docker-compose.yml", "docker-compose.yaml"],
+        "Android":    ["app/src/main/AndroidManifest.xml", "app/build.gradle", "app/build.gradle.kts"],
+        "Kotlin":     ["*.kt", "*.kts"],
+        "Gradle":     ["build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"],
         "Git":        [".git"],
     }
     for tech, indicators in checks.items():
