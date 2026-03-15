@@ -18,7 +18,7 @@ import display
 
 
 class Agent:
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, session_id: str | None = None):
         self.config = config
         self.client = OpenAI(
             base_url=config.base_url,
@@ -27,6 +27,7 @@ class Agent:
         self.history: list[dict] = []       # Conversation history
         self.context_files: list[str] = []  # Files user has /add-ed
         self._cwd = os.getcwd()             # Working directory
+        self.session_id = session_id        # Active session for persistence
 
     # ── Public interface ──────────────────────────────────────────
 
@@ -36,7 +37,9 @@ class Agent:
         Returns: final response text from AI.
         """
         # Add user message to history
-        self.history.append({"role": "user", "content": user_message})
+        user_msg = {"role": "user", "content": user_message}
+        self.history.append(user_msg)
+        self._persist_message(user_msg)
 
         # Add context files to message if available
         if self.context_files:
@@ -150,10 +153,9 @@ class Agent:
             # No tool call → AI is returning final text response
             if not message.tool_calls:
                 final_response = message.content or ""
-                self.history.append({
-                    "role": "assistant",
-                    "content": final_response
-                })
+                assistant_msg = {"role": "assistant", "content": final_response}
+                self.history.append(assistant_msg)
+                self._persist_message(assistant_msg)
 
                 # Display response
                 if self.config.stream:
@@ -161,7 +163,9 @@ class Agent:
                 break
 
             # Has tool call → execute each tool
-            self.history.append(self._message_to_dict(message))
+            tool_msg = self._message_to_dict(message)
+            self.history.append(tool_msg)
+            self._persist_message(tool_msg)
 
             for tool_call in message.tool_calls:
                 tool_name = tool_call.function.name
@@ -182,11 +186,13 @@ class Agent:
                     display.print_tool_result(tool_name, result)
 
                 # Add tool result to history
-                self.history.append({
+                tool_result_msg = {
                     "role": "tool",
                     "tool_call_id": tool_call.id,
                     "content": result,
-                })
+                }
+                self.history.append(tool_result_msg)
+                self._persist_message(tool_result_msg)
 
         if iteration >= self.config.max_iterations:
             display.print_error(f"Reached limit of {self.config.max_iterations} iterations.")
@@ -238,3 +244,22 @@ class Agent:
             for m in self.history
         )
         return total_chars // 4  # ~4 chars per token
+
+    # ── Session persistence ────────────────────────────────────────
+
+    def _persist_message(self, message: dict):
+        """Save a message to the active session (if any)."""
+        if not self.session_id:
+            return
+        try:
+            from memory import save_message
+            save_message(self.session_id, message)
+        except Exception:
+            pass  # Don't break chat if persistence fails
+
+    def load_session(self, session_id: str):
+        """Load history from an existing session."""
+        from memory import load_messages
+        self.session_id = session_id
+        self.history = load_messages(session_id)
+        display.print_info(f"Loaded session with {len(self.history)} messages.")

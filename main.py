@@ -47,6 +47,8 @@ Examples:
     parser.add_argument("--base-url",  "-u", help="API base URL")
     parser.add_argument("--api-key",   "-k", help="API key (use 'ollama' for Ollama)")
     parser.add_argument("--prompt",    "-p", help="One-shot prompt (no interactive session)")
+    parser.add_argument("--session",   "-s", help="Load or create a named session for persistence")
+    parser.add_argument("--continue-session", "-c", action="store_true", help="Continue the last session")
     parser.add_argument("--no-tools",        action="store_true", help="Disable tool calling")
     parser.add_argument("--no-context",      action="store_true", help="Don't auto-read codebase context")
     parser.add_argument("--config",          action="store_true", help="Show configuration and exit")
@@ -126,7 +128,50 @@ def handle_slash_command(cmd: str, agent: Agent, config: Config) -> bool:
         display.print_success(f"Config saved to ~/.config/localai/config.yaml")
         return True
 
+    elif command == "/session":
+        _handle_session_command(args, agent)
+        return True
+
     return False
+
+
+def _handle_session_command(args: str, agent: Agent):
+    """Handle /session subcommands: new, list, load <name>."""
+    from memory import create_session, list_sessions, load_messages
+
+    parts = args.strip().split(maxsplit=1)
+    subcmd = parts[0].lower() if parts else ""
+    subargs = parts[1] if len(parts) > 1 else ""
+
+    if subcmd == "new":
+        name = subargs or None
+        sid = create_session(name)
+        agent.session_id = sid
+        agent.history = []
+        display.print_success(f"New session created: {sid}" + (f" ({name})" if name else ""))
+
+    elif subcmd == "list":
+        sessions = list_sessions()
+        if not sessions:
+            display.print_info("No saved sessions.")
+            return
+        display.print_info("Recent sessions:")
+        for s in sessions:
+            active = " (active)" if s["id"] == agent.session_id else ""
+            display.print_info(f"  {s['id']}  {s['name']}  [{s['updated_at'][:16]}]{active}")
+
+    elif subcmd == "load":
+        if not subargs:
+            display.print_error("Usage: /session load <session-id>")
+            return
+        agent.load_session(subargs)
+
+    else:
+        if agent.session_id:
+            display.print_info(f"Active session: {agent.session_id}")
+        else:
+            display.print_info("No active session.")
+        display.print_info("Usage: /session new [name] | list | load <id>")
 
 
 def _apply_preset(agent: Agent, config: Config, preset: dict):
@@ -251,8 +296,24 @@ def main():
     if "localhost" in config.base_url or "127.0.0.1" in config.base_url:
         _check_ollama(config)
 
-    # Initialize agent
-    agent = Agent(config)
+    # Initialize agent with session support
+    session_id = None
+    if args.session or args.continue_session:
+        from memory import create_session, get_last_session_id
+        if args.continue_session:
+            session_id = get_last_session_id()
+            if not session_id:
+                display.print_info("No previous session found. Starting new session.")
+                session_id = create_session()
+        else:
+            session_id = create_session(args.session)
+        display.print_info(f"Session: {session_id}")
+
+    agent = Agent(config, session_id=session_id)
+
+    # Load existing session history
+    if session_id and args.continue_session:
+        agent.load_session(session_id)
 
     # One-shot mode
     if args.prompt:
