@@ -1,0 +1,17 @@
+# LocalAI — Dependencies
+# Cài đặt: pip install -r requirements.txt
+
+# ── Core LLM Client ────────────────────────────────────────────
+openai>=1.30.0              # OpenAI-compatible client (works với Ollama, Groq, OpenRouter)
+
+# ── Terminal UI ────────────────────────────────────────────────
+rich>=13.7.0                # Beautiful terminal output, markdown rendering
+prompt_toolkit>=3.0.43      # Input với history, autocomplete
+
+# ── Web Search & Scraping ──────────────────────────────────────
+duckduckgo-search>=6.2.0    # Search không cần API key
+requests>=2.31.0            # HTTP client để fetch URLs
+beautifulsoup4>=4.12.3      # Parse HTML khi fetch web pages
+
+# ── Config ─────────────────────────────────────────────────────
+pyyaml>=6.0.1               # Đọc/ghi config file YAML
