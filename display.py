@@ -1,6 +1,6 @@
 """
-display.py — Terminal UI với Rich
-Xử lý tất cả output: markdown, code blocks, tool calls, errors...
+display.py — Terminal UI with Rich
+Handles all output: markdown, code blocks, tool calls, errors...
 """
 from rich.console import Console
 from rich.markdown import Markdown
@@ -26,14 +26,14 @@ CLR_SEPARATOR = "dim blue"
 
 
 def print_welcome(model: str, base_url: str):
-    """Màn hình chào khi khởi động."""
+    """Welcome screen on startup."""
     console.print()
     console.print(Panel.fit(
         f"[bold cyan]🤖 LocalAI Terminal[/bold cyan]\n"
         f"[dim]Model: [yellow]{model}[/yellow]  |  "
         f"URL: [blue]{base_url}[/blue][/dim]\n\n"
-        f"[dim]Gõ [white]/help[/white] để xem lệnh  •  "
-        f"[white]Ctrl+C[/white] để thoát[/dim]",
+        f"[dim]Type [white]/help[/white] for commands  •  "
+        f"[white]Ctrl+C[/white] to exit[/dim]",
         border_style="cyan",
         padding=(1, 2),
     ))
@@ -41,36 +41,36 @@ def print_welcome(model: str, base_url: str):
 
 
 def print_help():
-    """Hiện danh sách slash commands."""
+    """Show list of slash commands."""
     console.print(Panel(
-        "[bold]Các lệnh đặc biệt:[/bold]\n\n"
-        "  [cyan]/help[/cyan]           — Hiện menu này\n"
-        "  [cyan]/clear[/cyan]          — Xóa conversation history\n"
-        "  [cyan]/model <tên>[/cyan]    — Đổi model (vd: /model llama3.2)\n"
-        "  [cyan]/add <file>[/cyan]     — Thêm file vào context\n"
-        "  [cyan]/files[/cyan]          — Xem files đang trong context\n"
-        "  [cyan]/config[/cyan]         — Xem cấu hình hiện tại\n"
-        "  [cyan]/cd <path>[/cyan]      — Đổi working directory\n"
-        "  [cyan]/exit[/cyan]           — Thoát\n\n"
-        "[dim]Hoặc gõ bất cứ điều gì để chat với AI[/dim]",
+        "[bold]Special commands:[/bold]\n\n"
+        "  [cyan]/help[/cyan]           — Show this menu\n"
+        "  [cyan]/clear[/cyan]          — Clear conversation history\n"
+        "  [cyan]/model <name>[/cyan]   — Switch model (e.g.: /model llama3.2)\n"
+        "  [cyan]/add <file>[/cyan]     — Add file to context\n"
+        "  [cyan]/files[/cyan]          — View files in context\n"
+        "  [cyan]/config[/cyan]         — View current configuration\n"
+        "  [cyan]/cd <path>[/cyan]      — Change working directory\n"
+        "  [cyan]/exit[/cyan]           — Exit\n\n"
+        "[dim]Or type anything to chat with AI[/dim]",
         title="[bold cyan]LocalAI Help[/bold cyan]",
         border_style="cyan",
     ))
 
 
 def print_separator():
-    """Đường kẻ phân cách mỏng."""
+    """Thin separator line."""
     console.print(Rule(style=CLR_SEPARATOR))
 
 
 def print_user_message(message: str):
-    """Hiện message của user với style."""
+    """Display user message with style."""
     console.print()
     console.print(f"[{CLR_USER}]You ›[/{CLR_USER}] {message}")
 
 
 def print_tool_call(tool_name: str, arguments: dict):
-    """Thông báo AI đang gọi tool gì."""
+    """Show which tool the AI is calling."""
     args_str = _format_tool_args(tool_name, arguments)
     console.print(
         f"  [dim]⚡[/dim] [{CLR_TOOL_NAME}]{tool_name}[/{CLR_TOOL_NAME}]"
@@ -79,7 +79,7 @@ def print_tool_call(tool_name: str, arguments: dict):
 
 
 def print_tool_result(tool_name: str, result: str, show_output: bool = True):
-    """Hiện kết quả tool (có thể ẩn nếu quá dài)."""
+    """Show tool result (can be hidden if too long)."""
     if not show_output:
         return
     lines = result.strip().splitlines()
@@ -87,7 +87,7 @@ def print_tool_result(tool_name: str, result: str, show_output: bool = True):
     if len(lines) <= preview_lines:
         preview = result.strip()
     else:
-        preview = "\n".join(lines[:preview_lines]) + f"\n[dim]... ({len(lines) - preview_lines} dòng nữa)[/dim]"
+        preview = "\n".join(lines[:preview_lines]) + f"\n[dim]... ({len(lines) - preview_lines} more lines)[/dim]"
 
     console.print(
         Panel(
@@ -100,7 +100,7 @@ def print_tool_result(tool_name: str, result: str, show_output: bool = True):
 
 
 def print_assistant_response(content: str):
-    """Render response của AI với Markdown và syntax highlight."""
+    """Render AI response with Markdown and syntax highlighting."""
     console.print()
     console.print(f"[{CLR_ASSISTANT}]AI ›[/{CLR_ASSISTANT}]")
     try:
@@ -111,54 +111,54 @@ def print_assistant_response(content: str):
 
 
 def print_assistant_stream_start():
-    """Bắt đầu stream response."""
+    """Start streaming response."""
     console.print()
     console.print(f"[{CLR_ASSISTANT}]AI ›[/{CLR_ASSISTANT}]")
 
 
 def print_stream_chunk(chunk: str):
-    """In từng chunk khi stream."""
+    """Print each chunk during streaming."""
     console.print(chunk, end="", markup=False)
 
 
 def print_stream_end():
-    """Kết thúc stream."""
+    """End stream."""
     console.print()
     console.print()
 
 
 def print_error(message: str):
-    """Hiện lỗi với màu đỏ."""
+    """Display error in red."""
     console.print(f"[{CLR_ERROR}]✗ {message}[/{CLR_ERROR}]")
 
 
 def print_info(message: str):
-    """Hiện thông tin phụ."""
+    """Display supplementary info."""
     console.print(f"[{CLR_INFO}]ℹ {message}[/{CLR_INFO}]")
 
 
 def print_success(message: str):
-    """Hiện thông báo thành công."""
+    """Display success message."""
     console.print(f"[{CLR_SUCCESS}]✓ {message}[/{CLR_SUCCESS}]")
 
 
 def print_thinking():
-    """Hiện spinner khi AI đang suy nghĩ."""
-    return console.status("[dim]Đang suy nghĩ...[/dim]", spinner="dots")
+    """Show spinner while AI is thinking."""
+    return console.status("[dim]Thinking...[/dim]", spinner="dots")
 
 
 def print_context_files(files: list[str]):
-    """Hiện danh sách files đang trong context."""
+    """Show list of files currently in context."""
     if not files:
-        console.print("[dim]Không có file nào trong context.[/dim]")
+        console.print("[dim]No files in context.[/dim]")
         return
-    console.print("[bold]Files trong context:[/bold]")
+    console.print("[bold]Files in context:[/bold]")
     for f in files:
         console.print(f"  [cyan]•[/cyan] {f}")
 
 
 def print_config(config_dict: dict):
-    """Hiện cấu hình hiện tại."""
+    """Display current configuration."""
     lines = []
     for k, v in config_dict.items():
         lines.append(f"  [cyan]{k}[/cyan]: [white]{v}[/white]")
@@ -170,7 +170,7 @@ def print_config(config_dict: dict):
 
 
 def _format_tool_args(tool_name: str, args: dict) -> str:
-    """Format args gọn để hiển thị."""
+    """Format args compactly for display."""
     if tool_name == "run_bash":
         cmd = args.get("command", "")
         return f'"{cmd[:60]}{"..." if len(cmd) > 60 else ""}"'

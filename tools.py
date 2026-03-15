@@ -1,6 +1,6 @@
 """
-tools.py — Tất cả tools mà agent có thể gọi
-Mỗi tool gồm: schema (mô tả cho LLM) + handler (logic thực thi)
+tools.py — All tools the agent can call
+Each tool has: schema (description for LLM) + handler (execution logic)
 """
 import os
 import json
@@ -14,44 +14,44 @@ from typing import Any
 # ════════════════════════════════════════════════════════════════
 
 def read_file(path: str) -> str:
-    """Đọc nội dung một file."""
+    """Read the contents of a file."""
     try:
         p = Path(path).expanduser()
         if not p.is_absolute():
             p = Path(os.getcwd()) / p
         if not p.exists():
-            return f"[Lỗi] File không tồn tại: {path}"
+            return f"[Error] File does not exist: {path}"
         size_kb = p.stat().st_size / 1024
         if size_kb > 500:
-            return f"[Cảnh báo] File quá lớn ({size_kb:.0f}KB). Hãy đọc từng phần."
+            return f"[Warning] File too large ({size_kb:.0f}KB). Read in parts instead."
         return p.read_text(encoding="utf-8", errors="replace")
     except Exception as e:
-        return f"[Lỗi đọc file] {e}"
+        return f"[Error reading file] {e}"
 
 
 def write_file(path: str, content: str) -> str:
-    """Ghi nội dung vào file (tạo mới hoặc ghi đè)."""
+    """Write content to a file (create new or overwrite)."""
     try:
         p = Path(path).expanduser()
         if not p.is_absolute():
             p = Path(os.getcwd()) / p
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
-        return f"[OK] Đã ghi {p.stat().st_size} bytes vào {path}"
+        return f"[OK] Wrote {p.stat().st_size} bytes to {path}"
     except Exception as e:
-        return f"[Lỗi ghi file] {e}"
+        return f"[Error writing file] {e}"
 
 
 def list_directory(path: str = ".", recursive: bool = False) -> str:
-    """Liệt kê files trong thư mục. recursive=True để xem toàn bộ cây."""
+    """List files in a directory. recursive=True to view the full tree."""
     try:
         p = Path(path).expanduser()
         if not p.is_absolute():
             p = Path(os.getcwd()) / p
         if not p.is_dir():
-            return f"[Lỗi] Không phải thư mục: {path}"
+            return f"[Error] Not a directory: {path}"
 
-        # Các thư mục/file cần bỏ qua
+        # Directories/files to ignore
         IGNORE = {
             ".git", "__pycache__", "node_modules", ".venv", "venv",
             ".env", "dist", "build", ".next", ".cache", "*.pyc",
@@ -82,11 +82,11 @@ def list_directory(path: str = ".", recursive: bool = False) -> str:
 
         return "\n".join(lines)
     except Exception as e:
-        return f"[Lỗi] {e}"
+        return f"[Error] {e}"
 
 
 def search_in_files(query: str, path: str = ".", file_pattern: str = "*") -> str:
-    """Tìm kiếm text trong các file của thư mục (dùng grep nội bộ)."""
+    """Search for text in files within a directory (internal grep)."""
     try:
         p = Path(path).expanduser()
         if not p.is_absolute():
@@ -95,11 +95,11 @@ def search_in_files(query: str, path: str = ".", file_pattern: str = "*") -> str
         count = 0
         for file in sorted(p.rglob(file_pattern)):
             if count > 200:
-                results.append("... (dừng tại 200 kết quả)")
+                results.append("... (stopped at 200 results)")
                 break
             if not file.is_file():
                 continue
-            # Bỏ qua binary & thư mục ignore
+            # Skip binary & ignored directories
             skip_dirs = {".git", "__pycache__", "node_modules", ".venv", "venv"}
             if any(part in skip_dirs for part in file.parts):
                 continue
@@ -113,17 +113,17 @@ def search_in_files(query: str, path: str = ".", file_pattern: str = "*") -> str
             except Exception:
                 continue
         if not results:
-            return f"Không tìm thấy '{query}' trong {path}"
+            return f"No results found for '{query}' in {path}"
         return "\n".join(results)
     except Exception as e:
-        return f"[Lỗi search] {e}"
+        return f"[Error searching] {e}"
 
 
 # ════════════════════════════════════════════════════════════════
 # 2. BASH / SHELL EXECUTION
 # ════════════════════════════════════════════════════════════════
 
-# Lệnh bị chặn vì nguy hiểm
+# Blocked commands (dangerous)
 BLOCKED_COMMANDS = [
     "rm -rf /", "rm -rf ~", "mkfs", "dd if=/dev/zero",
     ":(){:|:&};:", "fork bomb", "shutdown", "reboot",
@@ -131,12 +131,12 @@ BLOCKED_COMMANDS = [
 
 
 def run_bash(command: str, timeout: int = 30) -> str:
-    """Chạy một lệnh bash trong thư mục hiện tại."""
-    # Safety check đơn giản
+    """Run a bash command in the current directory."""
+    # Simple safety check
     cmd_lower = command.lower()
     for blocked in BLOCKED_COMMANDS:
         if blocked in cmd_lower:
-            return f"[Bị chặn] Lệnh nguy hiểm bị từ chối: {blocked}"
+            return f"[Blocked] Dangerous command rejected: {blocked}"
 
     try:
         result = subprocess.run(
@@ -153,15 +153,15 @@ def run_bash(command: str, timeout: int = 30) -> str:
         if result.stderr:
             output += f"\n[stderr]\n{result.stderr}"
         if not output.strip():
-            return f"[OK] Lệnh chạy xong, không có output. Exit code: {result.returncode}"
-        # Giới hạn output dài
+            return f"[OK] Command finished, no output. Exit code: {result.returncode}"
+        # Limit long output
         if len(output) > 5000:
-            output = output[:5000] + "\n... (output bị cắt bớt)"
+            output = output[:5000] + "\n... (output truncated)"
         return output
     except subprocess.TimeoutExpired:
-        return f"[Timeout] Lệnh chạy quá {timeout}s"
+        return f"[Timeout] Command exceeded {timeout}s"
     except Exception as e:
-        return f"[Lỗi bash] {e}"
+        return f"[Bash error] {e}"
 
 
 # ════════════════════════════════════════════════════════════════
@@ -169,7 +169,7 @@ def run_bash(command: str, timeout: int = 30) -> str:
 # ════════════════════════════════════════════════════════════════
 
 def web_search(query: str, max_results: int = 8) -> str:
-    """Tìm kiếm trên DuckDuckGo (không cần API key)."""
+    """Search on DuckDuckGo (no API key required)."""
     try:
         from duckduckgo_search import DDGS
         results = []
@@ -179,16 +179,16 @@ def web_search(query: str, max_results: int = 8) -> str:
                     f"**{r['title']}**\n{r['href']}\n{r['body']}\n"
                 )
         if not results:
-            return f"Không tìm thấy kết quả cho: {query}"
-        return f"Kết quả tìm kiếm cho '{query}':\n\n" + "\n---\n".join(results)
+            return f"No results found for: {query}"
+        return f"Search results for '{query}':\n\n" + "\n---\n".join(results)
     except ImportError:
-        return "[Lỗi] Chưa cài duckduckgo-search. Chạy: pip install duckduckgo-search"
+        return "[Error] duckduckgo-search not installed. Run: pip install duckduckgo-search"
     except Exception as e:
-        return f"[Lỗi search] {e}"
+        return f"[Search error] {e}"
 
 
 def fetch_url(url: str) -> str:
-    """Tải nội dung một URL (trích xuất text, bỏ HTML)."""
+    """Fetch content from a URL (extract text, strip HTML)."""
     try:
         import requests
         from bs4 import BeautifulSoup
@@ -199,27 +199,27 @@ def fetch_url(url: str) -> str:
 
         soup = BeautifulSoup(resp.text, "html.parser")
 
-        # Xóa script/style
+        # Remove script/style
         for tag in soup(["script", "style", "nav", "footer", "iframe"]):
             tag.decompose()
 
         text = soup.get_text(separator="\n", strip=True)
-        # Bỏ dòng trống liên tiếp
+        # Remove consecutive blank lines
         lines = [l for l in text.splitlines() if l.strip()]
         text = "\n".join(lines)
 
         if len(text) > 6000:
-            text = text[:6000] + "\n... (nội dung bị cắt bớt)"
+            text = text[:6000] + "\n... (content truncated)"
 
-        return f"[Nội dung từ {url}]\n\n{text}"
+        return f"[Content from {url}]\n\n{text}"
     except ImportError:
-        return "[Lỗi] Chưa cài requests/beautifulsoup4. Chạy: pip install requests beautifulsoup4"
+        return "[Error] requests/beautifulsoup4 not installed. Run: pip install requests beautifulsoup4"
     except Exception as e:
-        return f"[Lỗi fetch] {e}"
+        return f"[Fetch error] {e}"
 
 
 # ════════════════════════════════════════════════════════════════
-# 4. TOOL REGISTRY — định nghĩa schema cho LLM
+# 4. TOOL REGISTRY — schema definitions for LLM
 # ════════════════════════════════════════════════════════════════
 
 TOOL_SCHEMAS = [
@@ -227,11 +227,11 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "read_file",
-            "description": "Đọc nội dung một file. Dùng khi cần xem code, config, hoặc text file.",
+            "description": "Read the contents of a file. Use when you need to view code, config, or text files.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Đường dẫn tới file (tương đối hoặc tuyệt đối)"},
+                    "path": {"type": "string", "description": "Path to file (relative or absolute)"},
                 },
                 "required": ["path"],
             },
@@ -241,12 +241,12 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "write_file",
-            "description": "Tạo file mới hoặc ghi đè nội dung file đã có. Dùng khi cần tạo code mới hoặc chỉnh sửa file.",
+            "description": "Create a new file or overwrite an existing file. Use when you need to create new code or edit a file.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path":    {"type": "string", "description": "Đường dẫn file cần ghi"},
-                    "content": {"type": "string", "description": "Toàn bộ nội dung sẽ ghi vào file"},
+                    "path":    {"type": "string", "description": "Path to the file to write"},
+                    "content": {"type": "string", "description": "Full content to write to the file"},
                 },
                 "required": ["path", "content"],
             },
@@ -256,12 +256,12 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "list_directory",
-            "description": "Xem danh sách files/thư mục. Dùng để khám phá cấu trúc project.",
+            "description": "List files/directories. Use to explore project structure.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path":      {"type": "string", "description": "Thư mục cần xem (mặc định: thư mục hiện tại)", "default": "."},
-                    "recursive": {"type": "boolean", "description": "True để xem toàn bộ cây thư mục", "default": False},
+                    "path":      {"type": "string", "description": "Directory to list (default: current directory)", "default": "."},
+                    "recursive": {"type": "boolean", "description": "True to view the full directory tree", "default": False},
                 },
             },
         },
@@ -270,13 +270,13 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "search_in_files",
-            "description": "Tìm kiếm text/keyword trong các file của project. Hữu ích khi tìm nơi dùng một hàm, biến, hoặc pattern.",
+            "description": "Search for text/keywords in project files. Useful for finding where a function, variable, or pattern is used.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query":        {"type": "string", "description": "Text cần tìm"},
-                    "path":         {"type": "string", "description": "Thư mục tìm kiếm", "default": "."},
-                    "file_pattern": {"type": "string", "description": "Pattern file (vd: '*.py', '*.js')", "default": "*"},
+                    "query":        {"type": "string", "description": "Text to search for"},
+                    "path":         {"type": "string", "description": "Directory to search in", "default": "."},
+                    "file_pattern": {"type": "string", "description": "File pattern (e.g.: '*.py', '*.js')", "default": "*"},
                 },
                 "required": ["query"],
             },
@@ -286,12 +286,12 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "run_bash",
-            "description": "Chạy lệnh bash/shell trong thư mục hiện tại. Dùng để: cài package, chạy tests, git commands, build project, xem logs...",
+            "description": "Run a bash/shell command in the current directory. Use for: installing packages, running tests, git commands, building projects, viewing logs...",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "command": {"type": "string", "description": "Lệnh shell cần chạy"},
-                    "timeout": {"type": "integer", "description": "Timeout tính bằng giây (mặc định 30)", "default": 30},
+                    "command": {"type": "string", "description": "Shell command to run"},
+                    "timeout": {"type": "integer", "description": "Timeout in seconds (default 30)", "default": 30},
                 },
                 "required": ["command"],
             },
@@ -301,12 +301,12 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "web_search",
-            "description": "Tìm kiếm thông tin trên internet (DuckDuckGo). Dùng khi cần: tra cứu docs, tìm giải pháp lỗi, research công nghệ mới.",
+            "description": "Search for information on the internet (DuckDuckGo). Use when you need to: look up docs, find error solutions, research new technologies.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query":       {"type": "string", "description": "Câu hỏi hoặc từ khóa cần tìm"},
-                    "max_results": {"type": "integer", "description": "Số kết quả tối đa (mặc định 8)", "default": 8},
+                    "query":       {"type": "string", "description": "Question or keywords to search"},
+                    "max_results": {"type": "integer", "description": "Maximum number of results (default 8)", "default": 8},
                 },
                 "required": ["query"],
             },
@@ -316,11 +316,11 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "fetch_url",
-            "description": "Tải và đọc nội dung một trang web. Dùng sau web_search để đọc chi tiết một bài viết/docs.",
+            "description": "Fetch and read the content of a web page. Use after web_search to read an article/docs in detail.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "url": {"type": "string", "description": "URL đầy đủ cần tải"},
+                    "url": {"type": "string", "description": "Full URL to fetch"},
                 },
                 "required": ["url"],
             },
@@ -328,7 +328,7 @@ TOOL_SCHEMAS = [
     },
 ]
 
-# Map tên tool → function handler
+# Map tool name → function handler
 TOOL_HANDLERS: dict[str, Any] = {
     "read_file":       read_file,
     "write_file":      write_file,
@@ -341,13 +341,13 @@ TOOL_HANDLERS: dict[str, Any] = {
 
 
 def execute_tool(name: str, arguments: dict) -> str:
-    """Gọi tool theo tên với arguments từ LLM."""
+    """Call a tool by name with arguments from the LLM."""
     handler = TOOL_HANDLERS.get(name)
     if not handler:
-        return f"[Lỗi] Tool không tồn tại: {name}"
+        return f"[Error] Tool does not exist: {name}"
     try:
         return handler(**arguments)
     except TypeError as e:
-        return f"[Lỗi tham số tool '{name}'] {e}"
+        return f"[Tool parameter error '{name}'] {e}"
     except Exception as e:
-        return f"[Lỗi chạy tool '{name}'] {e}"
+        return f"[Tool execution error '{name}'] {e}"

@@ -1,6 +1,6 @@
 """
-context.py — Xây dựng system prompt với context từ thư mục hiện tại
-Agent cần biết nó đang "đứng" ở đâu, project gì, tech stack gì.
+context.py — Build system prompt with context from the current directory
+The agent needs to know where it is, what project it's in, and what tech stack is used.
 """
 import os
 import subprocess
@@ -8,7 +8,7 @@ from pathlib import Path
 from datetime import datetime
 
 
-# Extensions file code phổ biến (ưu tiên đọc)
+# Common code file extensions (prioritized for reading)
 CODE_EXTENSIONS = {
     ".py", ".js", ".ts", ".jsx", ".tsx", ".go", ".rs", ".java",
     ".c", ".cpp", ".h", ".cs", ".rb", ".php", ".swift", ".kt",
@@ -18,7 +18,7 @@ CODE_EXTENSIONS = {
     ".sql", ".graphql",
 }
 
-# Files đặc biệt — luôn đọc vì chứa nhiều thông tin về project
+# Special files — always read as they contain important project info
 PRIORITY_FILES = {
     "README.md", "README.rst", "package.json", "pyproject.toml",
     "setup.py", "requirements.txt", "go.mod", "Cargo.toml",
@@ -35,7 +35,7 @@ IGNORE_DIRS = {
 
 
 def _get_git_info() -> str:
-    """Lấy thông tin git: branch, recent commits, staged files."""
+    """Get git info: branch, recent commits, staged files."""
     info_parts = []
     try:
         branch = subprocess.check_output(
@@ -70,7 +70,7 @@ def _get_git_info() -> str:
 
 
 def _get_project_tree(root: Path, max_depth: int = 3) -> str:
-    """Tạo cây thư mục gọn nhẹ (bỏ qua node_modules, .git, ...)."""
+    """Create a compact directory tree (skipping node_modules, .git, ...)."""
     lines = []
 
     def walk(path: Path, depth: int, prefix: str = ""):
@@ -88,7 +88,7 @@ def _get_project_tree(root: Path, max_depth: int = 3) -> str:
             and not item.name.endswith((".pyc", ".pyo"))
         ]
 
-        for i, item in enumerate(visible[:30]):  # Giới hạn 30 items mỗi level
+        for i, item in enumerate(visible[:30]):  # Limit 30 items per level
             is_last = i == len(visible) - 1
             connector = "└── " if is_last else "├── "
             lines.append(f"{prefix}{connector}{item.name}{'/' if item.is_dir() else ''}")
@@ -102,7 +102,7 @@ def _get_project_tree(root: Path, max_depth: int = 3) -> str:
 
 
 def _read_priority_files(root: Path, max_size_kb: int = 150) -> str:
-    """Đọc các file quan trọng như README, package.json, requirements.txt..."""
+    """Read important files like README, package.json, requirements.txt..."""
     contents = []
     for filename in PRIORITY_FILES:
         fpath = root / filename
@@ -120,7 +120,7 @@ def _read_priority_files(root: Path, max_size_kb: int = 150) -> str:
 
 
 def _detect_tech_stack(root: Path) -> list[str]:
-    """Nhận diện tech stack từ các file indicator."""
+    """Detect tech stack from indicator files."""
     stack = []
     checks = {
         "Python":     ["requirements.txt", "pyproject.toml", "setup.py", "*.py"],
@@ -149,24 +149,24 @@ def _detect_tech_stack(root: Path) -> list[str]:
 
 def build_system_prompt(cwd: str = None, max_file_size_kb: int = 150) -> str:
     """
-    Tạo system prompt đầy đủ với context về project hiện tại.
-    Đây là phần quan trọng nhất — giúp AI "hiểu" nó đang làm việc ở đâu.
+    Build a complete system prompt with context about the current project.
+    This is the most important part — helps the AI "understand" where it's working.
     """
     root = Path(cwd or os.getcwd()).resolve()
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-    # Thu thập thông tin
+    # Gather information
     tech_stack = _detect_tech_stack(root)
     git_info = _get_git_info()
     project_tree = _get_project_tree(root)
     priority_files = _read_priority_files(root, max_file_size_kb)
 
     # Build prompt
-    prompt = f"""Bạn là một AI assistant chạy local trong terminal, tương tự như Claude Code.
-Bạn thông minh, chính xác, và luôn suy nghĩ từng bước trước khi hành động.
+    prompt = f"""You are a local AI assistant running in the terminal, similar to Claude Code.
+You are smart, precise, and always think step by step before acting.
 
 ━━━ CONTEXT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📅 Thời gian: {now}
+📅 Time: {now}
 📁 Working directory: {root}
 """
 
@@ -177,7 +177,7 @@ Bạn thông minh, chính xác, và luôn suy nghĩ từng bước trước khi 
         prompt += f"\n📋 Git info:\n{git_info}\n"
 
     prompt += f"""
-━━━ CẤU TRÚC PROJECT ━━━━━━━━━━━━━━━━━━━━━━━
+━━━ PROJECT STRUCTURE ━━━━━━━━━━━━━━━━━━━━━━━
 {project_tree}
 """
 
@@ -188,23 +188,23 @@ Bạn thông minh, chính xác, và luôn suy nghĩ từng bước trước khi 
 """
 
     prompt += """
-━━━ HƯỚNG DẪN ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TOOLS bạn có thể dùng:
-  • read_file        — đọc bất kỳ file nào
-  • write_file       — tạo hoặc chỉnh sửa file
-  • list_directory   — khám phá cấu trúc thư mục
-  • search_in_files  — tìm kiếm text trong codebase
-  • run_bash         — chạy lệnh terminal (git, npm, pip, pytest...)
-  • web_search       — tìm kiếm Google/DuckDuckGo
-  • fetch_url        — đọc nội dung trang web
+━━━ INSTRUCTIONS ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOOLS you can use:
+  • read_file        — read any file
+  • write_file       — create or edit a file
+  • list_directory   — explore directory structure
+  • search_in_files  — search text in the codebase
+  • run_bash         — run terminal commands (git, npm, pip, pytest...)
+  • web_search       — search Google/DuckDuckGo
+  • fetch_url        — read web page content
 
-NGUYÊN TẮC:
-  1. Luôn đọc file trước khi chỉnh sửa (dùng read_file)
-  2. Khi không chắc — hỏi hoặc dùng list_directory để khám phá
-  3. Sau khi chỉnh sửa code — chạy tests nếu có
-  4. Giải thích rõ những gì bạn đang làm và tại sao
-  5. Nếu có lỗi — đọc lỗi kỹ, debug từng bước
+PRINCIPLES:
+  1. Always read a file before editing it (use read_file)
+  2. When unsure — ask or use list_directory to explore
+  3. After editing code — run tests if available
+  4. Clearly explain what you're doing and why
+  5. If there's an error — read the error carefully, debug step by step
 
-Hãy bắt đầu bằng cách phân tích yêu cầu của người dùng và lên kế hoạch trước khi hành động.
+Start by analyzing the user's request and planning before taking action.
 """
     return prompt
