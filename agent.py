@@ -248,7 +248,7 @@ class Agent:
                 if self.config.show_tool_calls:
                     display.print_tool_call(tool_name, arguments)
 
-                result = execute_tool(tool_name, arguments)
+                result = execute_tool(tool_name, arguments, config=self.config)
 
                 if self.config.show_tool_calls:
                     display.print_tool_result(tool_name, result)

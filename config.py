@@ -65,7 +65,7 @@ class Config:
 
     # ── Search Settings ───────────────────────────────────────────
     search_provider: str = "auto"       # auto | tavily | duckduckgo
-    tavily_api_key: str = ""            # Tavily API key (if empty, reads TAVILY_API_KEY env var)
+    tavily_api_key: str = ""            # Tavily API key (from YAML, env var TAVILY_API_KEY, or both)
 
     # ── UI Settings ────────────────────────────────────────────────
     show_tool_calls: bool = True        # Show which tool is being called
