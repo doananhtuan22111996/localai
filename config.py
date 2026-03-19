@@ -63,6 +63,10 @@ class Config:
     max_context_files: int = 20         # Max files to include in context
     auto_context: bool = True           # Auto-read directory structure
 
+    # ── Search Settings ───────────────────────────────────────────
+    search_provider: str = "auto"       # auto | tavily | duckduckgo
+    tavily_api_key: str = ""            # Tavily API key (from YAML, env var TAVILY_API_KEY, or both)
+
     # ── UI Settings ────────────────────────────────────────────────
     show_tool_calls: bool = True        # Show which tool is being called
     stream: bool = True                 # Stream output instead of waiting
@@ -83,6 +87,8 @@ class Config:
             "LOCALAI_API_KEY":     ("api_key",    str),
             "LOCALAI_MAX_TOKENS":  ("max_tokens", int),
             "LOCALAI_STREAM":      ("stream",     lambda v: v.lower() in ("1", "true", "yes")),
+            "LOCALAI_SEARCH_PROVIDER": ("search_provider", str),
+            "TAVILY_API_KEY":      ("tavily_api_key", str),
         }
         for env_key, (field_name, coerce) in env_map.items():
             if val := os.environ.get(env_key):

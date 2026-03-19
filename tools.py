@@ -195,8 +195,59 @@ def run_bash(command: str, timeout: int = 30) -> str:
 # 3. WEB SEARCH & FETCH
 # ════════════════════════════════════════════════════════════════
 
-def web_search(query: str, max_results: int = 8) -> str:
-    """Search on DuckDuckGo (no API key required)."""
+def _get_search_provider(config=None) -> str:
+    """Determine which search provider to use based on config/env."""
+    provider = "auto"
+    if config and config.search_provider:
+        provider = config.search_provider.lower()
+    else:
+        provider = os.environ.get("LOCALAI_SEARCH_PROVIDER", "auto").lower()
+    if provider in ("tavily", "duckduckgo"):
+        return provider
+    # auto: use Tavily if API key is available, else DuckDuckGo
+    api_key = (config.tavily_api_key if config else None) or os.environ.get("TAVILY_API_KEY")
+    if api_key:
+        return "tavily"
+    return "duckduckgo"
+
+
+def _get_tavily_api_key(config=None) -> str:
+    """Get Tavily API key from config or env var."""
+    if config and config.tavily_api_key:
+        return config.tavily_api_key
+    return os.environ.get("TAVILY_API_KEY", "")
+
+
+def _search_tavily(query: str, max_results: int, config=None) -> str:
+    """Search using Tavily API."""
+    try:
+        from tavily import TavilyClient
+        api_key = _get_tavily_api_key(config)
+        if not api_key:
+            return (
+                "[Error] TAVILY_API_KEY not set. "
+                "Set it in config.yaml (tavily_api_key) or as an env var. "
+                "Get a key at https://app.tavily.com"
+            )
+        client = TavilyClient(api_key=api_key)
+        response = client.search(query=query, max_results=max_results)
+        results = []
+        for r in response.get("results", []):
+            title = r.get("title", "")
+            url = r.get("url", "")
+            content = r.get("content", "")
+            results.append(f"**{title}**\n{url}\n{content}\n")
+        if not results:
+            return f"No results found for: {query}"
+        return f"Search results for '{query}' (via Tavily):\n\n" + "\n---\n".join(results)
+    except ImportError:
+        return "[Error] tavily-python not installed. Run: pip install tavily-python"
+    except Exception as e:
+        return f"[Search error] {e}"
+
+
+def _search_duckduckgo(query: str, max_results: int) -> str:
+    """Search using DuckDuckGo (no API key required)."""
     try:
         from duckduckgo_search import DDGS
         results = []
@@ -212,6 +263,14 @@ def web_search(query: str, max_results: int = 8) -> str:
         return "[Error] duckduckgo-search not installed. Run: pip install duckduckgo-search"
     except Exception as e:
         return f"[Search error] {e}"
+
+
+def web_search(query: str, max_results: int = 8, config=None) -> str:
+    """Search the web using Tavily (if configured) or DuckDuckGo (default)."""
+    provider = _get_search_provider(config)
+    if provider == "tavily":
+        return _search_tavily(query, max_results, config)
+    return _search_duckduckgo(query, max_results)
 
 
 def _is_url_safe(url: str) -> bool:
@@ -356,7 +415,7 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "web_search",
-            "description": "Search for information on the internet (DuckDuckGo). Use when you need to: look up docs, find error solutions, research new technologies.",
+            "description": "Search for information on the internet (supports Tavily and DuckDuckGo). Uses Tavily when TAVILY_API_KEY is set, otherwise falls back to DuckDuckGo. Use when you need to: look up docs, find error solutions, research new technologies.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -395,12 +454,15 @@ TOOL_HANDLERS: dict[str, Any] = {
 }
 
 
-def execute_tool(name: str, arguments: dict) -> str:
+def execute_tool(name: str, arguments: dict, config=None) -> str:
     """Call a tool by name with arguments from the LLM."""
     handler = TOOL_HANDLERS.get(name)
     if not handler:
         return f"[Error] Tool does not exist: {name}"
     try:
+        # Pass config to tools that support it
+        if name == "web_search" and config is not None:
+            return handler(**arguments, config=config)
         return handler(**arguments)
     except TypeError as e:
         return f"[Tool parameter error '{name}'] {e}"

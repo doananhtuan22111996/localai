@@ -8,7 +8,7 @@
 
 - **Read & understand codebase** — Automatically reads project structure, README, package.json on startup
 - **Run bash commands** — AI runs `npm install`, `pytest`, `git commit`... when needed
-- **Web search** — DuckDuckGo search with no API key required for research and debugging
+- **Web search** — DuckDuckGo (no API key) or Tavily (higher quality, requires API key) for research and debugging
 - **Read/write files** — Create new files, edit code, refactor on demand
 - **Slash commands** — `/add`, `/model`, `/cd`, `/clear`... similar to Aider
 - **Multi-provider** — Ollama (local), Groq (free cloud), OpenRouter, any OpenAI-compatible API
@@ -109,6 +109,10 @@ Or use environment variables:
 export LOCALAI_MODEL=llama3.2
 export LOCALAI_BASE_URL=http://localhost:11434/v1
 export LOCALAI_API_KEY=ollama
+
+# Search provider (optional): auto | tavily | duckduckgo (default: auto)
+export LOCALAI_SEARCH_PROVIDER=tavily
+export TAVILY_API_KEY=tvly-xxxxxxxxxxxxx   # Get a key at https://app.tavily.com
 ```
 
 ---

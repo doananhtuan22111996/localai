@@ -10,6 +10,7 @@ prompt_toolkit>=3.0.43      # Input với history, autocomplete
 
 # ── Web Search & Scraping ──────────────────────────────────────
 duckduckgo-search>=6.2.0    # Search không cần API key
+tavily-python>=0.5.0        # Tavily search API (requires TAVILY_API_KEY to use)
 requests>=2.31.0            # HTTP client để fetch URLs
 beautifulsoup4>=4.12.3      # Parse HTML khi fetch web pages
 
